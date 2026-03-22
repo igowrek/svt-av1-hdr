@@ -222,7 +222,6 @@ static void svt_av1_generate_noise(const NoiseArgs *noise_args, EbSvtAv1EncConfi
     const int32_t noise_chroma = noise_args->str_chroma;
     const int32_t grain_size   = get_grain_size(noise_args);
     set_scaling_points_y(film_grain, noise_args);
-    film_grain->chroma_scaling_from_luma      = 0;
     if (noise_chroma == 0) {
         film_grain->num_cr_points = film_grain->num_cb_points = 0;
         film_grain->cr_mult = film_grain->cb_mult = 0;
@@ -230,7 +229,6 @@ static void svt_av1_generate_noise(const NoiseArgs *noise_args, EbSvtAv1EncConfi
         set_scaling_points_uv(film_grain, noise_args);
         // found from testing that this value allows to control chroma noise scaling points relative to midpoint value
         film_grain->cr_mult = film_grain->cb_mult = 64;
-        film_grain->chroma_scaling_from_luma      = 0;
     }
     film_grain->apply_grain       = 1;
     film_grain->ignore_ref        = 0;
@@ -247,6 +245,7 @@ static void svt_av1_generate_noise(const NoiseArgs *noise_args, EbSvtAv1EncConfi
     film_grain->cr_offset                = 0;
     film_grain->overlap_flag             = 1;
     film_grain->grain_scale_shift        = 0;
+    film_grain->chroma_scaling_from_luma = 0;
     film_grain->clip_to_restricted_range = (noise_args->color_range == EB_CR_STUDIO_RANGE) ? 1 : 0;
     cfg->fgs_table                       = film_grain;
 }
