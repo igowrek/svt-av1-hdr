@@ -749,6 +749,7 @@ EbErrorType svt_av1_verify_settings(SequenceControlSet *scs) {
     }
     if (config->noise_size < -1 || config->noise_size > 15) {
         SVT_ERROR("Noise size value should be in range [-1 - 15]\n");
+        return_error = EB_ErrorBadParameter;
     }
 
     // Limit 8K & 16K support
