@@ -739,12 +739,13 @@ EbErrorType svt_av1_verify_settings(SequenceControlSet *scs) {
         return_error = EB_ErrorBadParameter;
     }
 
-    if (config->noise_strength_chroma < -1 || config->noise_strength_chroma > 100) {
-        SVT_ERROR("Chroma noise strength value should be in the range [-1 - 100]\n");
-        return_error = EB_ErrorBadParameter;
-    }
+
     if (config->noise_strength > 100) {
         SVT_ERROR("Noise strength value should be in the range [0 - 100]\n");
+        return_error = EB_ErrorBadParameter;
+    }
+    if (config->noise_strength_chroma < -2 || config->noise_strength_chroma > 100) {
+        SVT_ERROR("Chroma noise strength value should be in the range [-2 - 100]\n");
         return_error = EB_ErrorBadParameter;
     }
     if (config->noise_size < -1 || config->noise_size > 15) {
@@ -1224,7 +1225,7 @@ void svt_av1_print_lib_params(SequenceControlSet *scs) {
             }
         }
         if (config->noise_strength > 0) {
-            if (config->noise_strength_chroma > 0) {
+            if (config->noise_strength_chroma > -1) {
                 SVT_INFO("SVT [config]: noise table gen / luma level / chroma level / size \t\t: %d / %d / %d / %s%.0d\n",
                          1,
                          config->noise_strength,
@@ -1237,7 +1238,7 @@ void svt_av1_print_lib_params(SequenceControlSet *scs) {
                 SVT_INFO("SVT [config]: noise table gen / level / chroma / size \t\t\t: %d / %d / %s / %s%.0d\n",
                          1,
                          config->noise_strength,
-                         config->noise_strength_chroma == -1 ? "on" : "off",
+                         config->noise_strength_chroma == -1 ? "on" : "legacy",
                          ((config->noise_size == -1)      ? "auto"
                               : (config->noise_size == 0) ? "0"
                                                           : ""),

@@ -918,7 +918,7 @@ ConfigDescription config_entry_specific[] = {
     {NOISE_TOKEN, "Generate noise table for film grain, default is 0 [0: off, 1-100: strength value]"},
 
     {NOISE_CHROMA_TOKEN,
-     "Scale chroma noise based on luma or set a separate strength value, default is -1 [-1: on, 0: off, 1-100: strength value]"},
+     "Add chroma noise with strength based on noise setting (-1) or set a strength value independently (0-100), default is -1 [-2: (legacy) scale from luma, -1: on, 0: off, 1-100: strength value]"},
 
     {NOISE_SIZE_TOKEN, "Set size of noise grain, default is -1 [-1: auto, 0-15: set grain size]"},
 

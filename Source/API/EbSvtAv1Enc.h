@@ -1066,7 +1066,8 @@ typedef struct EbSvtAv1EncConfiguration {
     /**
      * @brief Control whether chroma noise is scaled from luma or as a separate strength value
      *
-     * -1: chroma scaling based on luma
+     * -2: enable chroma scaling from luma flag in the noise table (legacy)
+     * -1: chroma strength value is derived from noise strength value
      *  0: disable chroma noise
      *  1-100: chroma noise strength
      * Default is -1.

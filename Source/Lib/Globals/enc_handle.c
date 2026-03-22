@@ -3858,7 +3858,7 @@ static void set_param_based_on_input(SequenceControlSet *scs)
             SVT_WARN("Chroma noise strength signal is going to be ignored when noise strength level is 0.\n");
             scs->static_config.noise_strength_chroma = -1;
         }
-        if (scs->static_config.noise_size > -1) {
+        if (scs->static_config.noise_size != -1) {
             SVT_WARN("Noise size signal is going to be ignored when noise strength level is 0.\n");
             scs->static_config.noise_size = -1;
         }
