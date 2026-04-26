@@ -1104,11 +1104,22 @@ typedef struct EbSvtAv1EncConfiguration {
      */
     uint8_t film_grain_fade;
 
+    /**
+    * @brief Interval in frames for film grain estimation.
+    * The film grain model is estimated on frames where
+    * picture_number % film_grain_estimation_interval == 0.
+    * Other frames reuse the previous estimated parameters.
+    * Min value is 1.
+    * Max value is 10.
+    * Default is 1 (estimate every frame).
+    */
+    uint8_t film_grain_estimation_interval;
+
     /*Add 128 Byte Padding to Struct to avoid changing the size of the public configuration struct*/
     uint8_t padding[128 - sizeof(PredStructure) +
                     sizeof(uint8_t) // pred_strucutre type was changed from uint8_t to PredStructure
                     /* SVT-AV1-HDR additions */
-                    - (sizeof(uint8_t) * 11) - (sizeof(int8_t) * 1) - (sizeof(int32_t) * 1) - (sizeof(bool) * 3) -
+                    - (sizeof(uint8_t) * 12) - (sizeof(int8_t) * 1) - (sizeof(int32_t) * 1) - (sizeof(bool) * 3) -
                     (sizeof(double))];
     // clang-format on
 } EbSvtAv1EncConfiguration;

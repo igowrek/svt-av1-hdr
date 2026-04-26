@@ -282,6 +282,14 @@ void set_segments_numbers(SequenceControlSet* scs) {
                                                               : MIN(rest_seg_h, 6);
 }
 
+static inline uint8_t get_fg_pa_processes(uint8_t pa_proc_fg, uint8_t pa_proc_base, uint8_t interval) {
+    uint8_t pa_processes = pa_proc_base + (pa_proc_fg - pa_proc_base) / interval;
+    if (interval > 1) {
+        pa_processes += 1;
+    }
+    return pa_processes;
+}
+
 static EbErrorType load_default_buffer_configuration_settings(SequenceControlSet* scs) {
     EbErrorType return_error = EB_ErrorNone;
     uint32_t    core_count   = get_num_processors();
@@ -590,7 +598,9 @@ static EbErrorType load_default_buffer_configuration_settings(SequenceControlSet
         scs->total_process_init_count += (scs->cdef_process_init_count = 1);
         scs->total_process_init_count += (scs->rest_process_init_count = 1);
     } else if (lp <= PARALLEL_LEVEL_2) {
-        const uint8_t pa_processes = scs->static_config.film_grain_denoise_strength ? 16 : 1;
+        const uint8_t pa_processes = scs->static_config.film_grain_denoise_strength
+            ? get_fg_pa_processes(16, 1, scs->static_config.film_grain_estimation_interval)
+            : 1;
         scs->total_process_init_count += (scs->source_based_operations_process_init_count = 1);
         scs->total_process_init_count += (scs->picture_analysis_process_init_count = clamp(
                                               pa_processes, 1, max_pa_proc));
@@ -605,7 +615,9 @@ static EbErrorType load_default_buffer_configuration_settings(SequenceControlSet
         scs->total_process_init_count += (scs->cdef_process_init_count = clamp(6, 1, max_cdef_proc));
         scs->total_process_init_count += (scs->rest_process_init_count = clamp(1, 1, max_rest_proc));
     } else if (lp <= PARALLEL_LEVEL_3) {
-        const uint8_t pa_processes = scs->static_config.film_grain_denoise_strength ? 16 : 1;
+        const uint8_t pa_processes = scs->static_config.film_grain_denoise_strength
+            ? get_fg_pa_processes(16, 1, scs->static_config.film_grain_estimation_interval)
+            : 1;
         scs->total_process_init_count += (scs->source_based_operations_process_init_count = 1);
         scs->total_process_init_count += (scs->picture_analysis_process_init_count = clamp(
                                               pa_processes, 1, max_pa_proc));
@@ -620,7 +632,9 @@ static EbErrorType load_default_buffer_configuration_settings(SequenceControlSet
         scs->total_process_init_count += (scs->cdef_process_init_count = clamp(6, 1, max_cdef_proc));
         scs->total_process_init_count += (scs->rest_process_init_count = clamp(2, 1, max_rest_proc));
     } else if (lp <= PARALLEL_LEVEL_5 || scs->input_resolution <= INPUT_SIZE_1080p_RANGE) {
-        uint8_t pa_processes = scs->static_config.film_grain_denoise_strength ? 20 : 4;
+        uint8_t pa_processes = scs->static_config.film_grain_denoise_strength
+            ? get_fg_pa_processes(20, 4, scs->static_config.film_grain_estimation_interval)
+            : 4;
         if (scs->static_config.pass == ENC_FIRST_PASS) {
             pa_processes = lp <= PARALLEL_LEVEL_5 ? 12 : 20;
         }
@@ -640,7 +654,7 @@ static EbErrorType load_default_buffer_configuration_settings(SequenceControlSet
     } else {
         const uint8_t pa_processes = (scs->static_config.pass == ENC_FIRST_PASS ||
                                       scs->static_config.film_grain_denoise_strength)
-            ? 20
+            ? get_fg_pa_processes(20, 16, scs->static_config.film_grain_estimation_interval)
             : 16;
         scs->total_process_init_count += (scs->source_based_operations_process_init_count = 1);
         scs->total_process_init_count += (scs->picture_analysis_process_init_count = clamp(
@@ -3943,7 +3957,12 @@ static void set_param_based_on_input(SequenceControlSet* scs) {
             SVT_WARN("Noise chroma from luma signal is going to be ignored when noise strength level is 0.\n");
             scs->static_config.noise_chroma_from_luma = 0;
         }
-        if (scs->static_config.noise_size != -1) {
+    }
+    if (scs->static_config.noise_size != -1) {
+        if (scs->static_config.film_grain_denoise_strength > 0) {
+            SVT_WARN("Noise size signal is going to be ignored when film grain strength level is 0.\n");
+            scs->static_config.noise_size = -1;
+        } else if (scs->static_config.noise_norm_strength > 0) {
             SVT_WARN("Noise size signal is going to be ignored when noise strength level is 0.\n");
             scs->static_config.noise_size = -1;
         }
@@ -4249,11 +4268,17 @@ static void copy_api_from_app(SequenceControlSet* scs, EbSvtAv1EncConfiguration*
     scs->static_config.fast_decode = config_struct->fast_decode;
 
     //Film Grain
-    scs->static_config.film_grain_denoise_strength = config_struct->film_grain_denoise_strength;
-    scs->static_config.film_grain_denoise_apply    = config_struct->film_grain_denoise_apply;
-    scs->static_config.film_grain_fade             = config_struct->film_grain_fade;
-    if (scs->static_config.film_grain_denoise_strength == 0 && scs->static_config.film_grain_denoise_apply == 1) {
-        SVT_WARN("Film grain denoise apply signal is going to be ignored when film grain is off.\n");
+    scs->static_config.film_grain_denoise_strength    = config_struct->film_grain_denoise_strength;
+    scs->static_config.film_grain_denoise_apply       = config_struct->film_grain_denoise_apply;
+    scs->static_config.film_grain_fade                = config_struct->film_grain_fade;
+    scs->static_config.film_grain_estimation_interval = config_struct->film_grain_estimation_interval;
+    if (scs->static_config.film_grain_denoise_strength == 0) {
+        if (scs->static_config.film_grain_denoise_apply == 1) {
+            SVT_WARN("Film grain denoise apply signal is going to be ignored when film grain is off.\n");
+        }
+        if (scs->static_config.film_grain_estimation_interval > 1) {
+            SVT_WARN("Film grain estimation interval setting is going to be ignored when film grain is off.\n");
+        }
     }
     scs->seq_header.film_grain_params_present = (uint8_t)(scs->static_config.film_grain_denoise_strength > 0);
     scs->static_config.fgs_table              = config_struct->fgs_table;
@@ -4261,6 +4286,9 @@ static void copy_api_from_app(SequenceControlSet* scs, EbSvtAv1EncConfiguration*
     scs->static_config.noise_strength_chroma  = config_struct->noise_strength_chroma;
     scs->static_config.noise_chroma_from_luma = config_struct->noise_chroma_from_luma;
     scs->static_config.noise_size             = config_struct->noise_size;
+    if (scs->static_config.film_grain_denoise_strength > 0 && scs->static_config.noise_size >= 0) {
+        svt_av1_set_ar_coeffs(scs);
+    }
 
     // MD Parameters
     scs->enable_hbd_mode_decision = config_struct->encoder_bit_depth > 8 ? DEFAULT : 0;
