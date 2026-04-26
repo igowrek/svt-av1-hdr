@@ -91,6 +91,7 @@
 #define FILM_GRAIN_TOKEN "--film-grain"
 #define FILM_GRAIN_DENOISE_APPLY_TOKEN "--film-grain-denoise"
 #define FILM_GRAIN_FADE_TOKEN "--film-grain-fade"
+#define FILM_GRAIN_ESTIMATION_INTERVAL_TOKEN "--film-grain-int"
 #define NOISE_TOKEN "--noise"
 #define NOISE_CHROMA_TOKEN "--noise-chroma"
 #define NOISE_CHROMA_FROM_LUMA_TOKEN "--noise-chroma-from-luma"
@@ -982,6 +983,9 @@ ConfigDescription config_entry_specific[] = {
 
     {FILM_GRAIN_FADE_TOKEN, "film_grain_fade"},
 
+    {FILM_GRAIN_ESTIMATION_INTERVAL_TOKEN,
+     "Film grain estimation interval, default is 1 [1: estimate every frame, 2-10: estimate every Nth frame and reuse previous params]"},
+
     {FGS_TABLE_TOKEN, "Set the film grain model table path"},
 
     {NOISE_TOKEN,
@@ -1246,6 +1250,7 @@ ConfigEntry config_entry[] = {
     {FILM_GRAIN_TOKEN, "FilmGrain", set_cfg_generic_token},
     {FILM_GRAIN_DENOISE_APPLY_TOKEN, "FilmGrainDenoise", set_cfg_generic_token},
     {FILM_GRAIN_FADE_TOKEN, "FilmGrainFadeToken", set_cfg_generic_token},
+    {FILM_GRAIN_ESTIMATION_INTERVAL_TOKEN, "FilmGrainEstimationInterval", set_cfg_generic_token},
     {FGS_TABLE_TOKEN, "FilmGrainTable", set_cfg_fgs_table_path},
     {NOISE_TOKEN, "Noise", set_cfg_generic_token},
     {NOISE_CHROMA_TOKEN, "NoiseChroma", set_cfg_generic_token},

@@ -12,6 +12,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include "aom_dsp_rtcd.h"
 #include "definitions.h"
@@ -19,6 +20,7 @@
 #include "sys_resource_manager.h"
 #include "pcs.h"
 #include "sequence_control_set.h"
+#include "encode_context.h"
 #include "pic_buffer_desc.h"
 
 #include "resource_coordination_results.h"
@@ -26,6 +28,7 @@
 #include "pic_analysis_results.h"
 #include "reference_object.h"
 #include "utility.h"
+#include "svt_threads.h"
 #include "me_context.h"
 #include "pic_operators.h"
 #include "resize.h"
@@ -511,6 +514,74 @@ static EbErrorType apply_film_grain_table(SequenceControlSet* scs_ptr, PicturePa
 
     return EB_ErrorNone;
 }
+
+static EbErrorType replace_ar_coeffs(SequenceControlSet* scs_ptr, AomFilmGrain* film_grain) {
+    NoiseCoeffTable* coeffs  = &scs_ptr->film_grain_ar_coeffs;
+    film_grain->ar_coeff_lag = coeffs->lag;
+    memcpy(film_grain->ar_coeffs_y, coeffs->cY, sizeof(film_grain->ar_coeffs_y));
+    memcpy(film_grain->ar_coeffs_cb, coeffs->cCb, sizeof(film_grain->ar_coeffs_cb));
+    memcpy(film_grain->ar_coeffs_cr, coeffs->cCr, sizeof(film_grain->ar_coeffs_cr));
+    film_grain->ar_coeff_shift = coeffs->shift;
+
+    return EB_ErrorNone;
+}
+
+static EbErrorType replace_film_grain_params(AomFilmGrain* src, PictureParentControlSet* pcs_ptr) {
+    AomFilmGrain* dst = &pcs_ptr->frm_hdr.film_grain_params;
+    const uint16_t seed = dst->random_seed;
+
+    if (svt_memcpy != NULL) {
+        svt_memcpy(dst, src, sizeof(*dst));
+    } else {
+        svt_memcpy_c(dst, src, sizeof(*dst));
+    }
+    dst->random_seed = seed;
+
+    return EB_ErrorNone;
+}
+
+static EbErrorType process_film_grain_interval(SequenceControlSet* scs_ptr, PictureParentControlSet* pcs_ptr) {
+    const uint32_t      picture_number = pcs_ptr->picture_number;
+    const uint32_t      interval       = scs_ptr->static_config.film_grain_estimation_interval;
+    FilmGrainParamSlot* fg_param_ring  = scs_ptr->fg_param_ring;
+    uint32_t            slot_num       = (picture_number / interval) % FG_PARAM_RING_SIZE;
+    FilmGrainParamSlot* slot           = &fg_param_ring[slot_num];
+    AomFilmGrain*       last_fg_params = &scs_ptr->last_fg_params;
+
+    if (picture_number % interval == 0) {
+        denoise_estimate_film_grain(scs_ptr, pcs_ptr);
+        pcs_ptr->frm_hdr.film_grain_params.ignore_ref = 0;
+        if (scs_ptr->static_config.noise_size >= 0) {
+            replace_ar_coeffs(scs_ptr, &pcs_ptr->frm_hdr.film_grain_params);
+        }
+        if (scs_ptr->picture_analysis_process_init_count > 1) {
+            svt_block_on_mutex(scs_ptr->enc_ctx->sc_buffer_mutex);
+            svt_set_cond_var(&slot->ready, 0);
+            slot->params       = pcs_ptr->frm_hdr.film_grain_params;
+            slot->frame_number = picture_number;
+            svt_release_mutex(scs_ptr->enc_ctx->sc_buffer_mutex);
+            svt_set_cond_var(&slot->ready, 1);
+        } else {
+            *last_fg_params = pcs_ptr->frm_hdr.film_grain_params;
+        }
+    } else if (scs_ptr->picture_analysis_process_init_count > 1) {
+        uint32_t target_frame = picture_number - (picture_number % interval);
+        while (true) {
+            svt_block_on_mutex(scs_ptr->enc_ctx->sc_buffer_mutex);
+            if (slot->frame_number == target_frame) {
+                replace_film_grain_params(&slot->params, pcs_ptr);
+                svt_release_mutex(scs_ptr->enc_ctx->sc_buffer_mutex);
+                break;
+            }
+            svt_release_mutex(scs_ptr->enc_ctx->sc_buffer_mutex);
+            svt_wait_cond_var(&slot->ready, 0);
+        }
+    } else {
+        replace_film_grain_params(last_fg_params, pcs_ptr);
+    }
+
+    return EB_ErrorNone;
+}
 #endif
 
 /************************************************
@@ -526,7 +597,14 @@ void svt_aom_picture_pre_processing_operations(PictureParentControlSet* pcs, Seq
     if (scs->static_config.fgs_table) {
         apply_film_grain_table(scs, pcs);
     } else if (scs->static_config.film_grain_denoise_strength) {
-        denoise_estimate_film_grain(scs, pcs);
+        if (scs->static_config.film_grain_estimation_interval == 1) {
+            denoise_estimate_film_grain(scs, pcs);
+            if (scs->static_config.noise_size >= 0) {
+                replace_ar_coeffs(scs, &pcs->frm_hdr.film_grain_params);
+            }
+        } else {
+            process_film_grain_interval(scs, pcs);
+        }
     }
 #else
     (void)pcs;

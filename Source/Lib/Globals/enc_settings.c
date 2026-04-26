@@ -743,6 +743,14 @@ EbErrorType svt_av1_verify_settings(SequenceControlSet* scs) {
         return_error = EB_ErrorBadParameter;
     }
 
+    if (config->film_grain_estimation_interval < 1 || config->film_grain_estimation_interval > 10) {
+        SVT_ERROR("Film grain estimation interval should be in range [1-10]\n");
+        return_error = EB_ErrorBadParameter;
+    } else if (config->film_grain_denoise_apply == 1) {
+        SVT_ERROR("Film grain estimation interval should not be used when denoising is applied\n");
+        return_error = EB_ErrorBadParameter;
+    }
+
     if (config->noise_strength > 200) {
         SVT_ERROR("Noise strength value should be in the range [0 - 200]\n");
         return_error = EB_ErrorBadParameter;
@@ -1004,13 +1012,14 @@ EbErrorType svt_av1_set_default_params(EbSvtAv1EncConfiguration* config_ptr) {
     config_ptr->level   = 0;
 
     // Film grain denoising
-    config_ptr->film_grain_denoise_strength = 0;
-    config_ptr->film_grain_denoise_apply    = 0;
-    config_ptr->film_grain_fade             = 0;
-    config_ptr->noise_strength              = 0;
-    config_ptr->noise_strength_chroma       = -1;
-    config_ptr->noise_chroma_from_luma      = 0;
-    config_ptr->noise_size                  = -1;
+    config_ptr->film_grain_denoise_strength    = 0;
+    config_ptr->film_grain_denoise_apply       = 0;
+    config_ptr->film_grain_fade                = 0;
+    config_ptr->film_grain_estimation_interval = 1;
+    config_ptr->noise_strength                 = 0;
+    config_ptr->noise_strength_chroma          = -1;
+    config_ptr->noise_chroma_from_luma         = 0;
+    config_ptr->noise_size                     = -1;
 
     // CPU Flags
     config_ptr->use_cpu_flags = EB_CPU_FLAGS_ALL;
@@ -1237,6 +1246,11 @@ void svt_av1_print_lib_params(SequenceControlSet* scs) {
                     1,
                     config->film_grain_denoise_apply,
                     config->film_grain_denoise_strength);
+            }
+            if (config->film_grain_estimation_interval > 1 || config->noise_size > -1) {
+                SVT_INFO("SVT [config]: film grain estimation interval / noise size \t\t\t: %d / %d\n",
+                         config->film_grain_estimation_interval,
+                         config->noise_size);
             }
         }
         if (config->noise_strength > 0) {
@@ -2321,6 +2335,7 @@ EB_API EbErrorType svt_av1_enc_parse_parameter(EbSvtAv1EncConfiguration* config_
         {"tune", &config_struct->tune},
         {"film-grain-denoise", &config_struct->film_grain_denoise_apply},
         {"film-grain-fade", &config_struct->film_grain_fade},
+        {"film-grain-int", &config_struct->film_grain_estimation_interval},
         {"noise", &config_struct->noise_strength},
         {"noise-chroma-from-luma", &config_struct->noise_chroma_from_luma},
         {"enable-dlf", &config_struct->enable_dlf_flag},

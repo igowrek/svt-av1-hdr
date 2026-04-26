@@ -440,6 +440,17 @@ EbErrorType svt_wait_cond_var(CondVar* cond_var, int32_t input) {
     return return_error;
 }
 
+EbErrorType svt_destroy_cond_var(CondVar* cond_var) {
+#ifdef _WIN32
+    DeleteCriticalSection(&cond_var->cs);
+    return EB_ErrorNone;
+#else
+    EbErrorType return_error = pthread_cond_destroy(&cond_var->m_cond);
+    return_error |= pthread_mutex_destroy(&cond_var->m_mutex);
+    return return_error;
+#endif
+}
+
 void svt_run_once(OnceType* once_control, OnceFn init_routine) {
 #ifdef _WIN32
     InitOnceExecuteOnce(once_control, init_routine, NULL, NULL);

@@ -18,6 +18,14 @@
 #include "encode_context.h"
 #include "object.h"
 #include "firstpass.h"
+#include "noise_generation.h"
+#include "svt_threads.h"
+
+typedef struct FilmGrainParamSlot {
+    AomFilmGrain params;
+    uint64_t     frame_number;
+    CondVar      ready;
+} FilmGrainParamSlot;
 
 #ifdef __cplusplus
 extern "C" {
@@ -111,6 +119,11 @@ typedef struct SequenceControlSet {
     uint8_t enable_dg;
     /*!< Film grain seed */
     uint16_t film_grain_random_seed;
+    /*!< Film grain params for interval*/
+    FilmGrainParamSlot fg_param_ring[FG_PARAM_RING_SIZE];
+    AomFilmGrain       last_fg_params;
+    /*!< Noise-size params */
+    NoiseCoeffTable film_grain_ar_coeffs;
 
     /*!< Sequence resolution parameters */
     uint32_t          chroma_format_idc;
