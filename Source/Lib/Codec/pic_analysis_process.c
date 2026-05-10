@@ -526,8 +526,7 @@ static EbErrorType replace_ar_coeffs(SequenceControlSet* scs_ptr, AomFilmGrain* 
     return EB_ErrorNone;
 }
 
-static EbErrorType replace_film_grain_params(AomFilmGrain* src, PictureParentControlSet* pcs_ptr) {
-    AomFilmGrain* dst = &pcs_ptr->frm_hdr.film_grain_params;
+static EbErrorType replace_film_grain_params(AomFilmGrain* src, AomFilmGrain* dst) {
     const uint16_t seed = dst->random_seed;
 
     if (svt_memcpy != NULL) {
@@ -540,44 +539,188 @@ static EbErrorType replace_film_grain_params(AomFilmGrain* src, PictureParentCon
     return EB_ErrorNone;
 }
 
-static EbErrorType process_film_grain_interval(SequenceControlSet* scs_ptr, PictureParentControlSet* pcs_ptr) {
-    const uint32_t      picture_number = pcs_ptr->picture_number;
-    const uint32_t      interval       = scs_ptr->static_config.film_grain_estimation_interval;
-    FilmGrainParamSlot* fg_param_ring  = scs_ptr->fg_param_ring;
-    uint32_t            slot_num       = (picture_number / interval) % FG_PARAM_RING_SIZE;
-    FilmGrainParamSlot* slot           = &fg_param_ring[slot_num];
-    AomFilmGrain*       last_fg_params = &scs_ptr->last_fg_params;
-
-    if (picture_number % interval == 0) {
-        denoise_estimate_film_grain(scs_ptr, pcs_ptr);
-        pcs_ptr->frm_hdr.film_grain_params.ignore_ref = 0;
-        if (scs_ptr->static_config.noise_size >= 0) {
-            replace_ar_coeffs(scs_ptr, &pcs_ptr->frm_hdr.film_grain_params);
-        }
-        if (scs_ptr->picture_analysis_process_init_count > 1) {
-            svt_block_on_mutex(scs_ptr->enc_ctx->sc_buffer_mutex);
-            svt_set_cond_var(&slot->ready, 0);
-            slot->params       = pcs_ptr->frm_hdr.film_grain_params;
-            slot->frame_number = picture_number;
-            svt_release_mutex(scs_ptr->enc_ctx->sc_buffer_mutex);
-            svt_set_cond_var(&slot->ready, 1);
-        } else {
-            *last_fg_params = pcs_ptr->frm_hdr.film_grain_params;
-        }
-    } else if (scs_ptr->picture_analysis_process_init_count > 1) {
-        uint32_t target_frame = picture_number - (picture_number % interval);
-        while (true) {
-            svt_block_on_mutex(scs_ptr->enc_ctx->sc_buffer_mutex);
-            if (slot->frame_number == target_frame) {
-                replace_film_grain_params(&slot->params, pcs_ptr);
-                svt_release_mutex(scs_ptr->enc_ctx->sc_buffer_mutex);
-                break;
+/*
+ * Linearly interpolate scaling points between two film grain param sets.
+ */
+static EbErrorType interpolate_film_grain_scaling_points(AomFilmGrain* start_params, AomFilmGrain* end_params,
+                                                         AomFilmGrain* out_params, uint32_t frame_dist,
+                                                         uint32_t frame_offset) {
+    // Linear interpolation factor: 0.0 (start) to 1.0 (end)
+    double   t            = (double)frame_offset / frame_dist;
+    int32_t* start_num[3] = {&start_params->num_y_points, &start_params->num_cb_points, &start_params->num_cr_points};
+    int32_t* end_num[3]   = {&end_params->num_y_points, &end_params->num_cb_points, &end_params->num_cr_points};
+    int32_t (*start_scaling[3])[2] = {
+        start_params->scaling_points_y,
+        start_params->scaling_points_cb,
+        start_params->scaling_points_cr,
+    };
+    int32_t (*end_scaling[3])[2] = {
+        end_params->scaling_points_y,
+        end_params->scaling_points_cb,
+        end_params->scaling_points_cr,
+    };
+    int32_t (*out_scaling[3])[2] = {
+        out_params->scaling_points_y,
+        out_params->scaling_points_cb,
+        out_params->scaling_points_cr,
+    };
+    for (int32_t c = 0; c < 3; c++) {
+        if (*start_num[c] == *end_num[c]) {
+            replace_film_grain_params(start_params, out_params);
+            const int32_t r_max_idx = *start_num[c] - 2;
+            out_scaling[c][1][1]    = (int32_t)(start_scaling[c][1][1] +
+                                                t * (end_scaling[c][1][1] - start_scaling[c][1][1]) + 0.5);
+            out_scaling[c][r_max_idx][1] =
+                (int32_t)(start_scaling[c][r_max_idx][1] +
+                          t * (end_scaling[c][r_max_idx][1] - start_scaling[c][r_max_idx][1]) + 0.5);
+            for (int32_t i = 2; i < r_max_idx; i++) {
+                out_scaling[c][i][0] = (int32_t)(start_scaling[c][i][0] +
+                                                 t * (end_scaling[c][i][0] - start_scaling[c][i][0]) + 0.5);
+                out_scaling[c][i][1] = (int32_t)(start_scaling[c][i][1] +
+                                                 t * (end_scaling[c][i][1] - start_scaling[c][i][1]) + 0.5);
             }
-            svt_release_mutex(scs_ptr->enc_ctx->sc_buffer_mutex);
-            svt_wait_cond_var(&slot->ready, 0);
+        } else if (*start_num[c] > *end_num[c]) {
+            // Set point intensities to be the same as start
+            replace_film_grain_params(start_params, out_params);
+            for (int32_t i = 1; i < *start_num[c] - 1; i++) {
+                out_scaling[c][i][1] = (int32_t)(start_scaling[c][i][1] + t * (1 - start_scaling[c][i][1]) + 0.5);
+            }
+        } else {
+            // Set point intensities to be the same as end
+            replace_film_grain_params(end_params, out_params);
+            for (int32_t i = 1; i < *end_num[c] - 1; i++) {
+                out_scaling[c][i][1] = (int32_t)(1 + t * (end_scaling[c][i][1] - 1) + 0.5);
+            }
+        }
+    }
+
+    return EB_ErrorNone;
+}
+
+static void print_points(int32_t scaling_points[][2]) {
+    printf("\t");
+    for (int32_t i = 0; i < 6; i++) {
+        printf("%3d - %d; ", scaling_points[i][0], scaling_points[i][1]);
+    }
+    printf("\n");
+}
+
+static EbErrorType apply_basic_fg_params(AomFilmGrain* params, SequenceControlSet* scs_ptr) {
+    params->apply_grain       = 1;
+    params->update_parameters = 1;
+    params->ignore_ref        = 0;
+
+    const FGFadeParams fade_params = get_endpoint_fade_params(&scs_ptr->static_config);
+
+    params->num_y_points = params->num_cb_points = params->num_cr_points = 4;
+
+    int32_t (*film_grain_scaling[3])[2] = {
+        params->scaling_points_y,
+        params->scaling_points_cb,
+        params->scaling_points_cr,
+    };
+    for (int32_t c = 0; c < 3; c++) {
+        film_grain_scaling[c][0][0] = fade_params.fade_low;
+        film_grain_scaling[c][0][1] = 0;
+        film_grain_scaling[c][1][0] = fade_params.endpoint_min;
+        film_grain_scaling[c][1][1] = film_grain_scaling[c][2][1] = 1;
+        film_grain_scaling[c][2][0]                               = fade_params.endpoint_max;
+        film_grain_scaling[c][3][0]                               = fade_params.fade_high;
+        film_grain_scaling[c][3][1]                               = 0;
+    }
+
+    params->scaling_shift  = 8;
+    params->ar_coeff_lag   = 0;
+    params->ar_coeff_shift = 6;
+
+    params->cb_mult      = 128; // 8 bits
+    params->cb_luma_mult = 192; // 8 bits
+    params->cb_offset    = 256; // 9 bits
+
+    params->cr_mult      = 128; // 8 bits
+    params->cr_luma_mult = 192; // 8 bits
+    params->cr_offset    = 256; // 9 bits
+
+    params->chroma_scaling_from_luma = 0;
+    params->grain_scale_shift        = 0;
+    params->overlap_flag             = 1;
+
+    return EB_ErrorNone;
+}
+
+/*
+ * Interpolate film grain parameters for the interval.
+ */
+static EbErrorType process_film_grain_interval(SequenceControlSet* scs_ptr, PictureParentControlSet* pcs_ptr) {
+    const uint64_t picture_number = pcs_ptr->picture_number;
+    const uint8_t  interval       = scs_ptr->static_config.film_grain_estimation_interval;
+    AomFilmGrain*  pcs_fg_params  = &pcs_ptr->frm_hdr.film_grain_params;
+
+    if (scs_ptr->picture_analysis_process_init_count > 1) {
+        const bool          is_last_frame = pcs_ptr->end_of_sequence_flag;
+        uint8_t             slot_num      = (picture_number / interval) % FG_PARAM_RING_SIZE;
+        FilmGrainParamSlot* slot          = &scs_ptr->fg_param_ring[slot_num];
+        uint8_t             next_slot_num = (slot_num + 1) % FG_PARAM_RING_SIZE;
+        FilmGrainParamSlot* next_slot     = &scs_ptr->fg_param_ring[next_slot_num];
+
+        if (picture_number % interval == 0) {
+            // Estimate interval start
+            denoise_estimate_film_grain(scs_ptr, pcs_ptr);
+            if (!pcs_fg_params->apply_grain) {
+                apply_basic_fg_params(pcs_fg_params, scs_ptr);
+            }
+            if (scs_ptr->static_config.noise_size >= 0) {
+                replace_ar_coeffs(scs_ptr, pcs_fg_params);
+            }
+            svt_block_on_mutex(&slot->mutex);
+            svt_set_cond_var(&slot->ready, 0);
+            replace_film_grain_params(pcs_fg_params, &slot->params);
+            slot->picture = picture_number;
+            svt_set_cond_var(&slot->ready, 1);
+            svt_release_mutex(&slot->mutex);
+        } else if (is_last_frame) {
+            // Last frame
+            denoise_estimate_film_grain(scs_ptr, pcs_ptr);
+            if (!pcs_fg_params->apply_grain) {
+                apply_basic_fg_params(pcs_fg_params, scs_ptr);
+            }
+            if (scs_ptr->static_config.noise_size >= 0) {
+                replace_ar_coeffs(scs_ptr, pcs_fg_params);
+            }
+            svt_block_on_mutex(&next_slot->mutex);
+            svt_set_cond_var(&next_slot->ready, 0);
+            replace_film_grain_params(pcs_fg_params, &next_slot->params);
+            next_slot->picture = picture_number;
+            svt_set_cond_var(&next_slot->ready, 1);
+            svt_release_mutex(&next_slot->mutex);
+        } else {
+            // Interval frames
+            uint64_t slot_pic = picture_number - (picture_number % interval);
+            while (slot->picture != slot_pic || next_slot->picture <= slot->picture) {
+                svt_wait_cond_var(&slot->ready, 0);
+                svt_wait_cond_var(&next_slot->ready, 0);
+            }
+            svt_block_on_mutex(&slot->mutex);
+            svt_block_on_mutex(&next_slot->mutex);
+            interpolate_film_grain_scaling_points(&slot->params,
+                                                  &next_slot->params,
+                                                  &pcs_ptr->frm_hdr.film_grain_params,
+                                                  next_slot->picture - slot->picture,
+                                                  picture_number - slot->picture);
+            svt_release_mutex(&slot->mutex);
+            svt_release_mutex(&next_slot->mutex);
         }
     } else {
-        replace_film_grain_params(last_fg_params, pcs_ptr);
+        AomFilmGrain* last_fg_params = &scs_ptr->last_fg_params;
+        // Single process: estimate and apply immediately, no interpolation
+        if (picture_number % interval == 0) {
+            if (pcs_fg_params->apply_grain && scs_ptr->static_config.noise_size >= 0) {
+                replace_ar_coeffs(scs_ptr, pcs_fg_params);
+            }
+            replace_film_grain_params(pcs_fg_params, last_fg_params);
+        } else {
+            replace_film_grain_params(last_fg_params, pcs_fg_params);
+        }
     }
 
     return EB_ErrorNone;
@@ -1698,8 +1841,12 @@ void* svt_aom_picture_analysis_kernel(void* input_ptr) {
                 // Padding for input pictures
                 svt_aom_pad_input_pictures(scs, input_pic);
 
-                // Pre processing operations performed on the input picture
-                svt_aom_picture_pre_processing_operations(pcs, scs);
+                if (scs->picture_analysis_process_init_count == 0 ||
+                    pcs->picture_number % scs->static_config.film_grain_estimation_interval == 0 ||
+                    pcs->end_of_sequence_flag) {
+                    // Pre processing operations performed on the input picture
+                    svt_aom_picture_pre_processing_operations(pcs, scs);
+                }
 
                 if (input_pic->color_format >= EB_YUV422) {
                     // Jing: Do the conversion of 422/444=>420 here since it's multi-threaded kernel
@@ -1774,6 +1921,14 @@ void* svt_aom_picture_analysis_kernel(void* input_ptr) {
 
         // Post the Full Results Object
         svt_post_full_object(out_results_wrapper);
+
+        SequenceControlSet* scs = pcs->scs;
+        if (scs->picture_analysis_process_init_count > 1 &&
+            pcs->picture_number % scs->static_config.film_grain_estimation_interval != 0 &&
+            !pcs->end_of_sequence_flag) {
+            // Pre processing operations performed on the input picture
+            svt_aom_picture_pre_processing_operations(pcs, scs);
+        }
     }
     return NULL;
 }
