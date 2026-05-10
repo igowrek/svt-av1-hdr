@@ -26,9 +26,6 @@ static void svt_sequence_control_set_dctor(EbPtr p) {
     if (!obj) {
         return;
     }
-    for (uint32_t i = 0; i < FG_PARAM_RING_SIZE; ++i) {
-        svt_destroy_cond_var(&obj->fg_param_ring[i].ready);
-    }
     EB_FREE_ARRAY(obj->b64_geom);
     free_sb_geoms(obj->sb_geom);
     free_scale_evts(&obj->static_config.frame_scale_evts);
