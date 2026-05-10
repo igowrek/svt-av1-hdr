@@ -30,6 +30,7 @@
 #include "pic_operators.h"
 #include "resize.h"
 #include "av1me.h"
+#include "noise_generation.h"
 
 #define VARIANCE_PRECISION 16
 
@@ -433,6 +434,19 @@ static void compute_b64_variance(SequenceControlSet* scs, PictureParentControlSe
 }
 
 #if CONFIG_ENABLE_FILM_GRAIN
+static FGFadeParams get_endpoint_fade_params(EbSvtAv1EncConfiguration* config) {
+    const EbColorRange color_range = find_color_range(config);
+    const uint32_t     range_min   = (color_range == EB_CR_STUDIO_RANGE && config->film_grain_fade) ? 16 : 0;
+    const uint32_t     range_max   = (color_range == EB_CR_STUDIO_RANGE && config->film_grain_fade) ? 235 : 255;
+    // const uint32_t     range       = range_max - range_min;
+    // const uint32_t     ramp        = (config->film_grain_fade + 0.5) * range / 255;
+
+    return (FGFadeParams){.fade_low     = range_min,
+                          .fade_high    = range_max,
+                          .endpoint_min = range_min + config->film_grain_fade,
+                          .endpoint_max = range_max - config->film_grain_fade};
+}
+
 static int32_t apply_denoise_2d(SequenceControlSet* scs, PictureParentControlSet* pcs,
                                 EbPictureBufferDesc* inputPicturePointer) {
     AomDenoiseAndModel*     denoise_and_model;
@@ -448,11 +462,13 @@ static int32_t apply_denoise_2d(SequenceControlSet* scs, PictureParentControlSet
     fg_init_data.denoise_apply        = scs->static_config.film_grain_denoise_apply;
     fg_init_data.adaptive_film_grain  = scs->static_config.adaptive_film_grain;
     EB_NEW(denoise_and_model, svt_aom_denoise_and_model_ctor, (EbPtr)&fg_init_data);
+    const FGFadeParams endpoint_fade_params = get_endpoint_fade_params(&scs->static_config);
 
     if (svt_aom_denoise_and_model_run(denoise_and_model,
                                       inputPicturePointer,
                                       &pcs->frm_hdr.film_grain_params,
-                                      scs->static_config.encoder_bit_depth > EB_EIGHT_BIT)) {}
+                                      scs->static_config.encoder_bit_depth > EB_EIGHT_BIT,
+                                      endpoint_fade_params)) {}
 
     EB_DELETE(denoise_and_model);
 

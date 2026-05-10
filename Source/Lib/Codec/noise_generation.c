@@ -17,15 +17,7 @@
 #include "definitions.h"
 #include "sequence_control_set.h"
 #include "svt_log.h"
-
-typedef struct {
-    int32_t lag;
-    int32_t shift;
-
-    int32_t cY[24];
-    int32_t cCb[25];
-    int32_t cCr[25];
-} NoiseCoeffTable;
+#include "noise_generation.h"
 
 /* AR coefficients extracted from a grain‑table file generated from a sample noise
  * clip encoded with SVT‑AV1 and film‑grain enabled. Each table corresponds to a
@@ -119,7 +111,7 @@ typedef struct {
     EbColorRange color_range;
 } NoiseArgs;
 
-static EbColorRange find_color_range(EbSvtAv1EncConfiguration* config) {
+EbColorRange find_color_range(EbSvtAv1EncConfiguration* config) {
     // If the color range is explicitly provided, use it.
     if (config->color_range_provided) {
         return config->color_range;

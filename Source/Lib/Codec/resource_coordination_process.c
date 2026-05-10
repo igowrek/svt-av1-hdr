@@ -281,12 +281,19 @@ void speed_buffer_control(ResourceCoordinationContext* context_ptr, PictureParen
 
 // Film grain (assigning the random-seed)
 static void assign_film_grain_random_seed(PictureParentControlSet* pcs) {
-    uint16_t* fgn_random_seed_ptr              = &pcs->scs->film_grain_random_seed;
-    pcs->frm_hdr.film_grain_params.random_seed = *fgn_random_seed_ptr;
-    *fgn_random_seed_ptr += 3381; // Changing random seed for film grain
-    if (!(*fgn_random_seed_ptr)) { // Random seed should not be zero
-        *fgn_random_seed_ptr += 7391;
-    }
+    uint16_t *fgn_random_seed_ptr = &pcs->scs->film_grain_random_seed;
+
+    const uint16_t good_seeds[] = {65506, 65501, 65484, 65476, 65466, 65464, 65420, 65417, 65391, 65345, 65333, 65299,
+                                   65260, 64921, 64917, 64831, 64774, 64693, 64448, 64436, 64435, 64423, 64384, 64332,
+                                   64285, 64274, 64240, 64189, 64176, 64126, 64113, 64093, 63947, 63647, 63580, 63507,
+                                   63504, 63456, 63023, 62518, 62359, 62258, 62156, 62143, 62040, 61851, 61692, 61482,
+                                   61476, 60973, 60878, 60711, 60619, 60584, 60537, 60501, 60123, 59991, 59929, 59846,
+                                   59724, 59669, 59665, 59637, 59625, 59621, 59180, 59119};
+
+    const uint16_t num_seeds = sizeof(good_seeds) / sizeof(good_seeds[0]);
+
+    pcs->frm_hdr.film_grain_params.random_seed = good_seeds[*fgn_random_seed_ptr % num_seeds];
+    *fgn_random_seed_ptr += 1;
 }
 
 static uint8_t get_delta_q_res(uint8_t qp, bool enable_variance_boost) {

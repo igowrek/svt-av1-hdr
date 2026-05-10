@@ -15,6 +15,17 @@
 #include "definitions.h"
 #include "EbSvtAv1Enc.h"
 
+typedef struct NoiseCoeffTable {
+    int32_t lag;
+    int32_t shift;
+
+    int32_t cY[24];
+    int32_t cCb[25];
+    int32_t cCr[25];
+} NoiseCoeffTable;
+
+EbColorRange find_color_range(EbSvtAv1EncConfiguration* config);
+
 EbErrorType svt_av1_generate_noise_table(EbSvtAv1EncConfiguration* config);
 
 #endif // EbPhotonNoiseTable_h
