@@ -75,6 +75,13 @@ typedef struct {
     double            total;
 } AomNoiseStrengthSolver;
 
+typedef struct FGFadeParams {
+    uint32_t fade_low;
+    uint32_t fade_high;
+    uint32_t endpoint_min;
+    uint32_t endpoint_max;
+} FGFadeParams;
+
 /*!\brief Initializes the noise solver with the given number of bins.
      *
      * Returns 0 if initialization fails.
@@ -83,7 +90,8 @@ typedef struct {
      * \param[in]  num_bins  Number of bins to use in the internal representation.
      * \param[in]  bit_depth The bit depth used to derive {min,max}_intensity.
      */
-int32_t svt_aom_noise_strength_solver_init(AomNoiseStrengthSolver* solver, int32_t num_bins, int32_t bit_depth);
+int32_t svt_aom_noise_strength_solver_init(AomNoiseStrengthSolver* solver, int32_t num_bins, int32_t bit_depth,
+                                           FGFadeParams fade_params);
 /*!\brief Gets the x coordinate of bin i.
      *
      * \param[in]  i  The bin whose coordinate to query.
@@ -250,7 +258,7 @@ EbErrorType svt_aom_denoise_and_model_ctor(AomDenoiseAndModel* object_ptr, EbPtr
      *
      * Returns 0 on failure.
      */
-int32_t svt_aom_noise_model_init(AomNoiseModel* model, const AomNoiseModelParams params);
+int32_t svt_aom_noise_model_init(AomNoiseModel* model, const AomNoiseModelParams params, FGFadeParams fade_params);
 void    svt_aom_noise_model_free(AomNoiseModel* model);
 
 /*\brief Save the "latest" estimate into the "combined" estimate.
@@ -268,7 +276,8 @@ void svt_aom_noise_model_save_latest(AomNoiseModel* noise_model);
      * floats), but the grain parameters in the Bitstream are quantized. This
      * function does the conversion by selecting the correct quantization levels.
      */
-int32_t svt_aom_noise_model_get_grain_parameters(AomNoiseModel* const noise_model, AomFilmGrain* film_grain);
+int32_t svt_aom_noise_model_get_grain_parameters(AomNoiseModel* const noise_model, AomFilmGrain* film_grain,
+                                                 FGFadeParams fade_params);
 
 /*!\brief Perform a Wiener filter denoising in 2D using the provided noise psd.
      *
@@ -305,7 +314,7 @@ struct AomDenoiseAndModel;
      * \param[out]    grain  Output film grain parameters
      */
 int32_t svt_aom_denoise_and_model_run(struct AomDenoiseAndModel* ctx, EbPictureBufferDesc* sd, AomFilmGrain* film_grain,
-                                      int32_t use_highbd);
+                                      int32_t use_highbd, FGFadeParams fade_params);
 
 /*!\brief Allocates a context that can be used for denoising and noise modeling.
      *

@@ -731,10 +731,10 @@ EbErrorType svt_av1_verify_settings(SequenceControlSet* scs) {
             "debug purposes.\n");
     }
 
-    if (config->film_grain_denoise_strength > 50) {
+    if (config->film_grain_denoise_strength > 200) {
         SVT_ERROR(
             "Film grain denoise strength is only supported for values between "
-            "[0,50]\n");
+            "[0,200]\n");
         return_error = EB_ErrorBadParameter;
     }
 
@@ -1006,6 +1006,7 @@ EbErrorType svt_av1_set_default_params(EbSvtAv1EncConfiguration* config_ptr) {
     // Film grain denoising
     config_ptr->film_grain_denoise_strength = 0;
     config_ptr->film_grain_denoise_apply    = 0;
+    config_ptr->film_grain_fade             = 0;
     config_ptr->noise_strength              = 0;
     config_ptr->noise_strength_chroma       = -1;
     config_ptr->noise_chroma_from_luma      = 0;
@@ -2319,6 +2320,7 @@ EB_API EbErrorType svt_av1_enc_parse_parameter(EbSvtAv1EncConfiguration* config_
         {"superres-kf-denom", &config_struct->superres_kf_denom},
         {"tune", &config_struct->tune},
         {"film-grain-denoise", &config_struct->film_grain_denoise_apply},
+        {"film-grain-fade", &config_struct->film_grain_fade},
         {"noise", &config_struct->noise_strength},
         {"noise-chroma-from-luma", &config_struct->noise_chroma_from_luma},
         {"enable-dlf", &config_struct->enable_dlf_flag},
