@@ -26,9 +26,6 @@ static void svt_sequence_control_set_dctor(EbPtr p) {
     if (!obj) {
         return;
     }
-    for (uint32_t i = 0; i < FG_PARAM_RING_SIZE; ++i) {
-        svt_destroy_cond_var(&obj->fg_param_ring[i].ready);
-    }
     EB_FREE_ARRAY(obj->b64_geom);
     free_sb_geoms(obj->sb_geom);
     free_scale_evts(&obj->static_config.frame_scale_evts);
@@ -78,7 +75,8 @@ EbErrorType svt_sequence_control_set_ctor(SequenceControlSet* scs, EbPtr object_
 
     scs->film_grain_random_seed = 0;
     for (uint32_t i = 0; i < FG_PARAM_RING_SIZE; ++i) {
-        scs->fg_param_ring[i].frame_number = 0;
+        EB_CREATE_MUTEX(scs->fg_param_ring[i].mutex);
+        scs->fg_param_ring[i].picture = 0;
         svt_create_cond_var(&scs->fg_param_ring[i].ready);
     }
 
@@ -150,6 +148,9 @@ static void svt_sequence_control_set_instance_dctor(EbPtr p) {
     EB_DELETE(obj->enc_ctx);
     EB_DESTROY_SEMAPHORE(obj->scs->ref_buffer_available_semaphore);
     EB_DESTROY_MUTEX(obj->config_mutex);
+    for (int i = 0; i < FG_PARAM_RING_SIZE; ++i) {
+        EB_DESTROY_MUTEX(obj->scs->fg_param_ring[i].mutex);
+    }
     EB_DELETE(obj->scs);
 }
 

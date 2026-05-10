@@ -272,8 +272,8 @@ static void svt_av1_generate_noise(const NoiseArgs* noise_args, EbSvtAv1EncConfi
     film_grain->scaling_shift     = 8;
     film_grain->ar_coeff_lag      = coeffs[grain_size].lag;
     memcpy(film_grain->ar_coeffs_y, coeffs[grain_size].cY, sizeof(film_grain->ar_coeffs_y));
-    memcpy(film_grain->ar_coeffs_cb, coeffs[grain_size].cCb, sizeof(film_grain->ar_coeffs_cb));
-    memcpy(film_grain->ar_coeffs_cr, coeffs[grain_size].cCr, sizeof(film_grain->ar_coeffs_cr));
+    memcpy(film_grain->ar_coeffs_cb, coeffs[0].cCb, sizeof(film_grain->ar_coeffs_cb));
+    memcpy(film_grain->ar_coeffs_cr, coeffs[0].cCr, sizeof(film_grain->ar_coeffs_cr));
     film_grain->ar_coeff_shift           = coeffs[grain_size].shift;
     film_grain->overlap_flag             = 1;
     film_grain->grain_scale_shift        = 0;
