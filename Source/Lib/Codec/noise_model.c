@@ -326,7 +326,7 @@ int32_t svt_aom_noise_strength_solver_init(AomNoiseStrengthSolver* solver, int32
     solver->num_bins = num_bins;
     if (fade_params.endpoint_min == 0) {
         solver->min_intensity = 0;
-        solver->max_intensity = 1 << bit_depth - 1;
+        solver->max_intensity = (1 << bit_depth) - 1;
     } else {
         solver->min_intensity = fade_params.endpoint_min << (bit_depth - 8);
         solver->max_intensity = fade_params.endpoint_max << (bit_depth - 8);
@@ -372,7 +372,7 @@ static void update_piecewise_linear_residual(const AomNoiseStrengthSolver* solve
 }
 
 int32_t svt_aom_noise_strength_solver_fit_piecewise(const AomNoiseStrengthSolver* solver, int32_t max_output_points,
-                                                    AomNoiseStrengthLut* lut) {
+                                                    AomNoiseStrengthLut* lut, bool fg_int) {
     // The tolerance is normalized to be give consistent results between
     // different bit-depths.
     const double k_tolerance = solver->max_intensity * 0.00625 / 255.0;
@@ -395,8 +395,8 @@ int32_t svt_aom_noise_strength_solver_fit_piecewise(const AomNoiseStrengthSolver
 
     // Greedily remove points if there are too many or if it doesn't hurt local
     // approximation (never remove the end points)
-    // uint8_t min_points = solver->min_intensity ? max_output_points : 2;
-    while (lut->num_points > 2) {
+    const uint8_t min_points = fg_int ? max_output_points : 2;
+    while (lut->num_points > min_points) {
         int32_t min_index = 1;
         for (int32_t j = 1; j < lut->num_points - 1; ++j) {
             if (residual[j] < residual[min_index]) {
@@ -1183,7 +1183,7 @@ void svt_aom_noise_model_save_latest(AomNoiseModel* noise_model) {
 }
 
 int32_t svt_aom_noise_model_get_grain_parameters(AomNoiseModel* const noise_model, AomFilmGrain* film_grain,
-                                                 FGFadeParams fade_params) {
+                                                 FGFadeParams fade_params, bool fg_int) {
     if (noise_model->params.lag > 3) {
         SVT_ERROR("params.lag = %d > 3\n", noise_model->params.lag);
         return 0;
@@ -1203,11 +1203,11 @@ int32_t svt_aom_noise_model_get_grain_parameters(AomNoiseModel* const noise_mode
     // Making sure there's space for the fade points
     const uint8_t fade_padding = fade_params.endpoint_min ? 2 : 0;
     svt_aom_noise_strength_solver_fit_piecewise(
-        &noise_model->combined_state[0].strength_solver, 14 - fade_padding, scaling_points + 0);
+        &noise_model->combined_state[0].strength_solver, 14 - fade_padding, scaling_points + 0, fg_int);
     svt_aom_noise_strength_solver_fit_piecewise(
-        &noise_model->combined_state[1].strength_solver, 10 - fade_padding, scaling_points + 1);
+        &noise_model->combined_state[1].strength_solver, 10 - fade_padding, scaling_points + 1, fg_int);
     svt_aom_noise_strength_solver_fit_piecewise(
-        &noise_model->combined_state[2].strength_solver, 10 - fade_padding, scaling_points + 2);
+        &noise_model->combined_state[2].strength_solver, 10 - fade_padding, scaling_points + 2, fg_int);
     // Both the domain and the range of the scaling functions in the film_grain
     // are normalized to 8-bit (e.g., they are implicitly scaled during grain
     // synthesis).
@@ -2317,7 +2317,7 @@ static void unpack_2d_pic(uint8_t* packed[3], EbPictureBufferDesc* outputPicture
 }
 
 int32_t svt_aom_denoise_and_model_run(struct AomDenoiseAndModel* ctx, EbPictureBufferDesc* sd, AomFilmGrain* film_grain,
-                                      int32_t use_highbd, FGFadeParams fade_params) {
+                                      int32_t use_highbd, FGFadeParams fade_params, bool fg_int) {
     const int32_t block_size = ctx->block_size;
     uint8_t*      raw_data[3];
     int32_t       chroma_sub_log2[2] = {1, 1}; //todo: send chroma subsampling
@@ -2377,7 +2377,7 @@ int32_t svt_aom_denoise_and_model_run(struct AomDenoiseAndModel* ctx, EbPictureB
 
     film_grain->apply_grain = 0;
     if (have_noise_estimate) {
-        if (!svt_aom_noise_model_get_grain_parameters(&ctx->noise_model, film_grain, fade_params)) {
+        if (!svt_aom_noise_model_get_grain_parameters(&ctx->noise_model, film_grain, fade_params, fg_int)) {
             SVT_ERROR("Unable to get grain parameters.\n");
             return 0;
         }
