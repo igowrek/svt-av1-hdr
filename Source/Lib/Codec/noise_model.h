@@ -114,7 +114,7 @@ int32_t svt_aom_noise_strength_solver_solve(AomNoiseStrengthSolver* solver);
      * \param[out] lut  The output piecewise linear lut.
      */
 int32_t svt_aom_noise_strength_solver_fit_piecewise(const AomNoiseStrengthSolver* solver, int32_t max_num_points,
-                                                    AomNoiseStrengthLut* lut);
+                                                    AomNoiseStrengthLut* lut, bool fg_int);
 
 /*!\brief Helper for holding precomputed data for finding flat blocks.
      *
@@ -277,7 +277,7 @@ void svt_aom_noise_model_save_latest(AomNoiseModel* noise_model);
      * function does the conversion by selecting the correct quantization levels.
      */
 int32_t svt_aom_noise_model_get_grain_parameters(AomNoiseModel* const noise_model, AomFilmGrain* film_grain,
-                                                 FGFadeParams fade_params);
+                                                 FGFadeParams fade_params, bool fg_int);
 
 /*!\brief Perform a Wiener filter denoising in 2D using the provided noise psd.
      *
@@ -314,7 +314,7 @@ struct AomDenoiseAndModel;
      * \param[out]    grain  Output film grain parameters
      */
 int32_t svt_aom_denoise_and_model_run(struct AomDenoiseAndModel* ctx, EbPictureBufferDesc* sd, AomFilmGrain* film_grain,
-                                      int32_t use_highbd, FGFadeParams fade_params);
+                                      int32_t use_highbd, FGFadeParams fade_params, bool fg_int);
 
 /*!\brief Allocates a context that can be used for denoising and noise modeling.
      *

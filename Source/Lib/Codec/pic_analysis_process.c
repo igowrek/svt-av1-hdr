@@ -466,12 +466,14 @@ static int32_t apply_denoise_2d(SequenceControlSet* scs, PictureParentControlSet
     fg_init_data.adaptive_film_grain  = scs->static_config.adaptive_film_grain;
     EB_NEW(denoise_and_model, svt_aom_denoise_and_model_ctor, (EbPtr)&fg_init_data);
     const FGFadeParams endpoint_fade_params = get_endpoint_fade_params(&scs->static_config);
+    const bool         fg_interval          = scs->static_config.film_grain_estimation_interval > 1;
 
     if (svt_aom_denoise_and_model_run(denoise_and_model,
                                       inputPicturePointer,
                                       &pcs->frm_hdr.film_grain_params,
                                       scs->static_config.encoder_bit_depth > EB_EIGHT_BIT,
-                                      endpoint_fade_params)) {}
+                                      endpoint_fade_params,
+                                      fg_interval)) {}
 
     EB_DELETE(denoise_and_model);
 
@@ -544,7 +546,7 @@ static EbErrorType replace_film_grain_params(AomFilmGrain* src, AomFilmGrain* ds
  */
 static EbErrorType interpolate_film_grain_scaling_points(AomFilmGrain* start_params, AomFilmGrain* end_params,
                                                          AomFilmGrain* out_params, uint32_t frame_dist,
-                                                         uint32_t frame_offset) {
+                                                         uint32_t frame_offset, bool fg_fade) {
     // Linear interpolation factor: 0.0 (start) to 1.0 (end)
     double   t            = (double)frame_offset / frame_dist;
     int32_t* start_num[3] = {&start_params->num_y_points, &start_params->num_cb_points, &start_params->num_cr_points};
@@ -564,16 +566,12 @@ static EbErrorType interpolate_film_grain_scaling_points(AomFilmGrain* start_par
         out_params->scaling_points_cb,
         out_params->scaling_points_cr,
     };
+    const uint8_t fade_offset   = fg_fade ? 1 : 0;
+    uint8_t       base_noise[3] = {1, 1, 1};
     for (int32_t c = 0; c < 3; c++) {
         if (*start_num[c] == *end_num[c]) {
             replace_film_grain_params(start_params, out_params);
-            const int32_t r_max_idx = *start_num[c] - 2;
-            out_scaling[c][1][1]    = (int32_t)(start_scaling[c][1][1] +
-                                                t * (end_scaling[c][1][1] - start_scaling[c][1][1]) + 0.5);
-            out_scaling[c][r_max_idx][1] =
-                (int32_t)(start_scaling[c][r_max_idx][1] +
-                          t * (end_scaling[c][r_max_idx][1] - start_scaling[c][r_max_idx][1]) + 0.5);
-            for (int32_t i = 2; i < r_max_idx; i++) {
+            for (int32_t i = fade_offset; i < *start_num[c] - fade_offset; i++) {
                 out_scaling[c][i][0] = (int32_t)(start_scaling[c][i][0] +
                                                  t * (end_scaling[c][i][0] - start_scaling[c][i][0]) + 0.5);
                 out_scaling[c][i][1] = (int32_t)(start_scaling[c][i][1] +
@@ -582,14 +580,15 @@ static EbErrorType interpolate_film_grain_scaling_points(AomFilmGrain* start_par
         } else if (*start_num[c] > *end_num[c]) {
             // Set point intensities to be the same as start
             replace_film_grain_params(start_params, out_params);
-            for (int32_t i = 1; i < *start_num[c] - 1; i++) {
-                out_scaling[c][i][1] = (int32_t)(start_scaling[c][i][1] + t * (1 - start_scaling[c][i][1]) + 0.5);
+            for (int32_t i = fade_offset; i < *start_num[c] - fade_offset; i++) {
+                out_scaling[c][i][1] = (int32_t)(start_scaling[c][i][1] + t * (base_noise[c] - start_scaling[c][i][1]) +
+                                                 0.5);
             }
         } else {
             // Set point intensities to be the same as end
             replace_film_grain_params(end_params, out_params);
-            for (int32_t i = 1; i < *end_num[c] - 1; i++) {
-                out_scaling[c][i][1] = (int32_t)(1 + t * (end_scaling[c][i][1] - 1) + 0.5);
+            for (int32_t i = fade_offset; i < *end_num[c] - fade_offset; i++) {
+                out_scaling[c][i][1] = (int32_t)(base_noise[c] + t * (end_scaling[c][i][1] - base_noise[c]) + 0.5);
             }
         }
     }
@@ -608,30 +607,36 @@ static void print_points(int32_t scaling_points[][2]) {
 static EbErrorType apply_basic_fg_params(AomFilmGrain* params, SequenceControlSet* scs_ptr) {
     params->apply_grain       = 1;
     params->update_parameters = 1;
-    params->ignore_ref        = 0;
+    params->ignore_ref        = 1;
 
     const FGFadeParams fade_params = get_endpoint_fade_params(&scs_ptr->static_config);
-
-    params->num_y_points = params->num_cb_points = params->num_cr_points = 4;
 
     int32_t (*film_grain_scaling[3])[2] = {
         params->scaling_points_y,
         params->scaling_points_cb,
         params->scaling_points_cr,
     };
+    const uint8_t fade_offset = scs_ptr->static_config.film_grain_fade ? 1 : 0;
+
+    params->num_y_points = params->num_cb_points = params->num_cr_points = 2 << fade_offset;
+    const uint8_t base_noise[3] = {1, 1, 1};
     for (int32_t c = 0; c < 3; c++) {
-        film_grain_scaling[c][0][0] = fade_params.fade_low;
-        film_grain_scaling[c][0][1] = 0;
-        film_grain_scaling[c][1][0] = fade_params.endpoint_min;
-        film_grain_scaling[c][1][1] = film_grain_scaling[c][2][1] = 1;
-        film_grain_scaling[c][2][0]                               = fade_params.endpoint_max;
-        film_grain_scaling[c][3][0]                               = fade_params.fade_high;
-        film_grain_scaling[c][3][1]                               = 0;
+        if (fade_offset) {
+            film_grain_scaling[c][0][0] = fade_params.fade_low;
+            film_grain_scaling[c][3][0] = fade_params.fade_high;
+            film_grain_scaling[c][0][1] = film_grain_scaling[c][3][1] = 0;
+        }
+        film_grain_scaling[c][fade_offset][0] = fade_params.endpoint_min;
+        film_grain_scaling[c][fade_offset + 1][0] = fade_params.endpoint_max;
+        film_grain_scaling[c][fade_offset][1] = film_grain_scaling[c][fade_offset + 1][1] = base_noise[c];
     }
 
-    params->scaling_shift  = 8;
-    params->ar_coeff_lag   = 0;
-    params->ar_coeff_shift = 6;
+    params->scaling_shift   = 8;
+    params->ar_coeff_lag    = 0;
+    params->ar_coeffs_y[0]  = 0;
+    params->ar_coeffs_cb[0] = 0;
+    params->ar_coeffs_cr[0] = 0;
+    params->ar_coeff_shift  = 6;
 
     params->cb_mult      = 128; // 8 bits
     params->cb_luma_mult = 192; // 8 bits
@@ -669,6 +674,7 @@ static EbErrorType process_film_grain_interval(SequenceControlSet* scs_ptr, Pict
             if (!pcs_fg_params->apply_grain) {
                 apply_basic_fg_params(pcs_fg_params, scs_ptr);
             }
+            pcs_fg_params->ignore_ref = 1;
             if (scs_ptr->static_config.noise_size >= 0) {
                 replace_ar_coeffs(scs_ptr, pcs_fg_params);
             }
@@ -684,6 +690,7 @@ static EbErrorType process_film_grain_interval(SequenceControlSet* scs_ptr, Pict
             if (!pcs_fg_params->apply_grain) {
                 apply_basic_fg_params(pcs_fg_params, scs_ptr);
             }
+            pcs_fg_params->ignore_ref = 1;
             if (scs_ptr->static_config.noise_size >= 0) {
                 replace_ar_coeffs(scs_ptr, pcs_fg_params);
             }
@@ -706,7 +713,8 @@ static EbErrorType process_film_grain_interval(SequenceControlSet* scs_ptr, Pict
                                                   &next_slot->params,
                                                   &pcs_ptr->frm_hdr.film_grain_params,
                                                   next_slot->picture - slot->picture,
-                                                  picture_number - slot->picture);
+                                                  picture_number - slot->picture,
+                                                  (bool)scs_ptr->static_config.film_grain_fade);
             svt_release_mutex(&slot->mutex);
             svt_release_mutex(&next_slot->mutex);
         }

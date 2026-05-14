@@ -282,6 +282,11 @@ void set_segments_numbers(SequenceControlSet* scs) {
                                                               : MIN(rest_seg_h, 6);
 }
 
+static uint8_t get_pa_processess(uint8_t interval, uint8_t pa_low, uint8_t pa_high) {
+    const uint8_t pa_interval = MAX((pa_high + interval - 1) / interval, interval);
+    return MAX(pa_interval, pa_low);
+}
+
 static EbErrorType load_default_buffer_configuration_settings(SequenceControlSet* scs) {
     EbErrorType return_error = EB_ErrorNone;
     uint32_t    core_count   = get_num_processors();
@@ -590,7 +595,9 @@ static EbErrorType load_default_buffer_configuration_settings(SequenceControlSet
         scs->total_process_init_count += (scs->cdef_process_init_count = 1);
         scs->total_process_init_count += (scs->rest_process_init_count = 1);
     } else if (lp <= PARALLEL_LEVEL_2) {
-        const uint8_t pa_processes = scs->static_config.film_grain_denoise_strength ? 16 : 1;
+        const uint8_t pa_processes = scs->static_config.film_grain_denoise_strength
+            ? get_pa_processess(scs->static_config.film_grain_estimation_interval, 1, 16)
+            : 1;
         scs->total_process_init_count += (scs->source_based_operations_process_init_count = 1);
         scs->total_process_init_count += (scs->picture_analysis_process_init_count = clamp(
                                               pa_processes, 1, max_pa_proc));
@@ -605,7 +612,9 @@ static EbErrorType load_default_buffer_configuration_settings(SequenceControlSet
         scs->total_process_init_count += (scs->cdef_process_init_count = clamp(6, 1, max_cdef_proc));
         scs->total_process_init_count += (scs->rest_process_init_count = clamp(1, 1, max_rest_proc));
     } else if (lp <= PARALLEL_LEVEL_3) {
-        const uint8_t pa_processes = scs->static_config.film_grain_denoise_strength ? 16 : 1;
+        const uint8_t pa_processes = scs->static_config.film_grain_denoise_strength
+            ? get_pa_processess(scs->static_config.film_grain_estimation_interval, 1, 16)
+            : 1;
         scs->total_process_init_count += (scs->source_based_operations_process_init_count = 1);
         scs->total_process_init_count += (scs->picture_analysis_process_init_count = clamp(
                                               pa_processes, 1, max_pa_proc));
@@ -620,7 +629,9 @@ static EbErrorType load_default_buffer_configuration_settings(SequenceControlSet
         scs->total_process_init_count += (scs->cdef_process_init_count = clamp(6, 1, max_cdef_proc));
         scs->total_process_init_count += (scs->rest_process_init_count = clamp(2, 1, max_rest_proc));
     } else if (lp <= PARALLEL_LEVEL_5 || scs->input_resolution <= INPUT_SIZE_1080p_RANGE) {
-        uint8_t pa_processes = scs->static_config.film_grain_denoise_strength ? 20 : 4;
+        uint8_t pa_processes = scs->static_config.film_grain_denoise_strength
+            ? get_pa_processess(scs->static_config.film_grain_estimation_interval, 4, 20)
+            : 4;
         if (scs->static_config.pass == ENC_FIRST_PASS) {
             pa_processes = lp <= PARALLEL_LEVEL_5 ? 12 : 20;
         }
@@ -640,7 +651,7 @@ static EbErrorType load_default_buffer_configuration_settings(SequenceControlSet
     } else {
         const uint8_t pa_processes = (scs->static_config.pass == ENC_FIRST_PASS ||
                                       scs->static_config.film_grain_denoise_strength)
-            ? 20
+            ? get_pa_processess(scs->static_config.film_grain_estimation_interval, 16, 20)
             : 16;
         scs->total_process_init_count += (scs->source_based_operations_process_init_count = 1);
         scs->total_process_init_count += (scs->picture_analysis_process_init_count = clamp(
