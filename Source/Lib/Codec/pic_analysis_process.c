@@ -1849,7 +1849,7 @@ void* svt_aom_picture_analysis_kernel(void* input_ptr) {
                 // Padding for input pictures
                 svt_aom_pad_input_pictures(scs, input_pic);
 
-                if (scs->picture_analysis_process_init_count == 0 ||
+                if (scs->picture_analysis_process_init_count == 1 ||
                     pcs->picture_number % scs->static_config.film_grain_estimation_interval == 0 ||
                     pcs->end_of_sequence_flag) {
                     // Pre processing operations performed on the input picture
