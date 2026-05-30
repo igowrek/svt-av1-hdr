@@ -2213,9 +2213,9 @@ EbErrorType svt_aom_denoise_and_model_ctor(AomDenoiseAndModel* object_ptr, EbPtr
 
     int32_t denoise_block_size = 32;
     if (init_data_ptr->adaptive_film_grain) {
-        if (input_resolution <= INPUT_SIZE_1080p_RANGE) {
+        if (input_resolution <= INPUT_SIZE_720p_RANGE) {
             denoise_block_size = 8;
-        } else if (input_resolution <= INPUT_SIZE_4K_RANGE) {
+        } else if (input_resolution <= INPUT_SIZE_1080p_RANGE) {
             denoise_block_size = 16;
         }
     }
