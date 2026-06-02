@@ -596,14 +596,6 @@ static EbErrorType interpolate_film_grain_scaling_points(AomFilmGrain* start_par
     return EB_ErrorNone;
 }
 
-static void print_points(int32_t scaling_points[][2]) {
-    printf("\t");
-    for (int32_t i = 0; i < 6; i++) {
-        printf("%3d - %d; ", scaling_points[i][0], scaling_points[i][1]);
-    }
-    printf("\n");
-}
-
 static EbErrorType apply_basic_fg_params(AomFilmGrain* params, SequenceControlSet* scs_ptr) {
     params->apply_grain       = 1;
     params->update_parameters = 1;
