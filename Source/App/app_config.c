@@ -90,6 +90,7 @@
 #define LEVEL_TOKEN "--level"
 #define FILM_GRAIN_TOKEN "--film-grain"
 #define FILM_GRAIN_DENOISE_APPLY_TOKEN "--film-grain-denoise"
+#define FILM_GRAIN_ENDPOINT_FADE_TOKEN "--fg-endpoint-fade"
 #define NOISE_TOKEN "--noise"
 #define NOISE_CHROMA_TOKEN "--noise-chroma"
 #define NOISE_CHROMA_FROM_LUMA_TOKEN "--noise-chroma-from-luma"
@@ -1010,6 +1011,11 @@ ConfigDescription config_entry_specific[] = {
      "Apply denoising when film grain is ON, default is 0 [0: no denoising, film grain data is "
      "still in frame header, 1: level of denoising is set by the film-grain parameter]"},
 
+    {FILM_GRAIN_ENDPOINT_FADE_TOKEN,
+     "Compress luma intensity range of estimated film grain by setting endpoint offset value "
+     "and fade endpoints to 0 noise strength at min and max intensities, "
+     "default is 0 [0: no endpoint fading, 1-25: endpoint offset value]"},
+
     {FGS_TABLE_TOKEN, "Set the film grain model table path"},
 
     {NOISE_TOKEN,
@@ -1279,6 +1285,7 @@ ConfigEntry config_entry[] = {
 #if CONFIG_ENABLE_FILM_GRAIN
     {FILM_GRAIN_TOKEN, "FilmGrain", set_cfg_generic_token},
     {FILM_GRAIN_DENOISE_APPLY_TOKEN, "FilmGrainDenoise", set_cfg_generic_token},
+    {FILM_GRAIN_ENDPOINT_FADE_TOKEN, "FilmGrainEndpointFadeToken", set_cfg_generic_token},
     {FGS_TABLE_TOKEN, "FilmGrainTable", set_cfg_fgs_table_path},
     {NOISE_TOKEN, "Noise", set_cfg_generic_token},
     {NOISE_CHROMA_TOKEN, "NoiseChroma", set_cfg_generic_token},

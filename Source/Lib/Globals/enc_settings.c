@@ -810,6 +810,11 @@ EbErrorType svt_av1_verify_settings(SequenceControlSet* scs) {
         return_error = EB_ErrorBadParameter;
     }
 
+    if (config->film_grain_endpoint_fade > 25) {
+        SVT_ERROR("Film grain endpoint fade value should be in the range [0 - 25]\n");
+        return_error = EB_ErrorBadParameter;
+    }
+
     if (config->noise_strength > 200) {
         SVT_ERROR("Noise strength value should be in the range [0 - 200]\n");
         return_error = EB_ErrorBadParameter;
@@ -1088,6 +1093,7 @@ EbErrorType svt_av1_set_default_params(EbSvtAv1EncConfiguration* config_ptr) {
     // Film grain denoising
     config_ptr->film_grain_denoise_strength = 0;
     config_ptr->film_grain_denoise_apply    = 0;
+    config_ptr->film_grain_endpoint_fade    = 0;
     config_ptr->noise_strength              = 0;
     config_ptr->noise_strength_chroma       = -1;
     config_ptr->noise_chroma_from_luma      = 0;
@@ -2447,6 +2453,7 @@ EB_API EbErrorType svt_av1_enc_parse_parameter(EbSvtAv1EncConfiguration* config_
         {"superres-kf-denom", &config_struct->superres_kf_denom},
         {"tune", &config_struct->tune},
         {"film-grain-denoise", &config_struct->film_grain_denoise_apply},
+        {"fg-endpoint-fade", &config_struct->film_grain_endpoint_fade},
         {"noise", &config_struct->noise_strength},
         {"noise-chroma-from-luma", &config_struct->noise_chroma_from_luma},
         {"enable-dlf", &config_struct->enable_dlf_flag},
