@@ -798,10 +798,10 @@ EbErrorType svt_av1_verify_settings(SequenceControlSet* scs) {
             "debug purposes.\n");
     }
 
-    if (config->film_grain_denoise_strength > 50) {
+    if (config->film_grain_denoise_strength > 200) {
         SVT_ERROR(
             "Film grain denoise strength is only supported for values between "
-            "[0,50]\n");
+            "[0,200]\n");
         return_error = EB_ErrorBadParameter;
     }
 

@@ -1005,7 +1005,7 @@ ConfigDescription config_entry_specific[] = {
     {ENABLE_INTRABC_TOKEN, "Enable Intra Block Copy, default is 1 [0: off, 1: on]"},
 #if CONFIG_ENABLE_FILM_GRAIN
     // Annex A parameters
-    {FILM_GRAIN_TOKEN, "Enable film grain, default is 0 [0: off, 1-50: level of denoising for film grain]"},
+    {FILM_GRAIN_TOKEN, "Enable film grain, default is 0 [0: off, 1-200: level of denoising for film grain]"},
 
     {FILM_GRAIN_DENOISE_APPLY_TOKEN,
      "Apply denoising when film grain is ON, default is 0 [0: no denoising, film grain data is "
