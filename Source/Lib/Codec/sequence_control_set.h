@@ -21,12 +21,6 @@
 #include "noise_generation.h"
 #include "svt_threads.h"
 
-typedef struct FilmGrainParamSlot {
-    AomFilmGrain params;
-    uint64_t     frame_number;
-    CondVar      ready;
-} FilmGrainParamSlot;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -60,6 +54,13 @@ typedef struct QpBasedThScaling {
 
 // Forward declaration for block geometry
 struct BlockGeom;
+
+typedef struct FilmGrainParamSlot {
+    AomFilmGrain params;
+    uint64_t     picture;
+    CondVar      ready;
+    EbHandle     mutex;
+} FilmGrainParamSlot;
 
 /************************************
      * Sequence Control Set

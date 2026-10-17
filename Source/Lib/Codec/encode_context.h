@@ -148,12 +148,6 @@ typedef struct EncodeContext {
     EbHandle sc_buffer_mutex;
     EncMode  enc_mode;
 
-    AomFilmGrain film_grain_params_reuse_ring[FG_PARAM_RING_SIZE];
-    uint64_t     film_grain_params_reuse_picture_number_ring[FG_PARAM_RING_SIZE];
-    uint8_t      film_grain_params_reuse_valid_ring[FG_PARAM_RING_SIZE];
-    CondVar      film_grain_params_reuse_ready_ring[FG_PARAM_RING_SIZE];
-    uint32_t     film_grain_params_reuse_ring_head;
-
     // Dynamic GOP
     uint32_t         previous_mini_gop_hierarchical_levels;
     uint64_t         mini_gop_cnt_per_gop;

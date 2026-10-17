@@ -552,22 +552,6 @@ EbErrorType svt_wait_cond_var(CondVar* cond_var, int32_t input) {
     return EB_ErrorNone;
 }
 
-EbErrorType svt_destroy_cond_var(CondVar* cond_var) {
-#ifdef _WIN32
-    /* CONDITION_VARIABLE has no destroy call; only the CS needs teardown.
-       Caller must guarantee no thread is inside/blocked on the CS. */
-    DeleteCriticalSection(&cond_var->cs);
-    return EB_ErrorNone;
-#else
-    EbErrorType cond_err  = pthread_cond_destroy(&cond_var->m_cond);
-    EbErrorType mutex_err = pthread_mutex_destroy(&cond_var->m_mutex);
-    if (cond_err != 0) {
-        return cond_err;
-    }
-    return mutex_err;
-#endif
-}
-
 void svt_run_once(OnceType* once_control, OnceFn init_routine) {
 #ifdef _WIN32
     InitOnceExecuteOnce(once_control, init_routine, NULL, NULL);
