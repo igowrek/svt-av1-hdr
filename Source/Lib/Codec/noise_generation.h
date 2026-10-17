@@ -28,4 +28,6 @@ EbColorRange find_color_range(EbSvtAv1EncConfiguration* config);
 
 EbErrorType svt_av1_generate_noise_table(EbSvtAv1EncConfiguration* config);
 
+EbErrorType svt_av1_set_ar_coeffs(struct SequenceControlSet* scs_ptr);
+
 #endif // EbPhotonNoiseTable_h

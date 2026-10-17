@@ -37,6 +37,8 @@
 // Instead of using x % y, we use x && (y-1)
 #define PARALLEL_GOP_MAX_NUMBER 256
 
+#define FG_PARAM_RING_SIZE 64
+
 typedef struct FirstPassStatsOut {
     FIRSTPASS_STATS* stat;
     size_t           size;
@@ -145,6 +147,12 @@ typedef struct EncodeContext {
     int64_t  sc_frame_out;
     EbHandle sc_buffer_mutex;
     EncMode  enc_mode;
+
+    AomFilmGrain film_grain_params_reuse_ring[FG_PARAM_RING_SIZE];
+    uint64_t     film_grain_params_reuse_picture_number_ring[FG_PARAM_RING_SIZE];
+    uint8_t      film_grain_params_reuse_valid_ring[FG_PARAM_RING_SIZE];
+    CondVar      film_grain_params_reuse_ready_ring[FG_PARAM_RING_SIZE];
+    uint32_t     film_grain_params_reuse_ring_head;
 
     // Dynamic GOP
     uint32_t         previous_mini_gop_hierarchical_levels;

@@ -1195,6 +1195,17 @@ typedef struct EbSvtAv1EncConfiguration {
      */
     uint8_t film_grain_endpoint_fade;
 
+    /**
+     * @brief Interval in frames for film grain estimation.
+     * The film grain model is estimated on frames where
+     * picture_number % film_grain_estimation_interval == 0.
+     * Other frames reuse the previous estimated parameters.
+     * Min value is 1.
+     * Max value is 10.
+     * Default is 1 (estimate every frame).
+     */
+    uint8_t film_grain_estimation_interval;
+
     // clang-format off
     /* Add 128 Byte Padding to Struct to avoid changing the size of the public configuration struct */
     uint8_t padding[128
@@ -1222,6 +1233,7 @@ typedef struct EbSvtAv1EncConfiguration {
         - sizeof(uint8_t) // noise_chroma_from_luma
         - sizeof(int8_t) // enable_qmpsnr
         - sizeof(int8_t) // film_grain_endpoint_fade
+        - sizeof(uint8_t) // film_grain_estimation_interval
     ];
     // clang-format on
 } EbSvtAv1EncConfiguration;

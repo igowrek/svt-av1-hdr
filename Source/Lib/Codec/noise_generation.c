@@ -295,3 +295,16 @@ EbErrorType svt_av1_generate_noise_table(EbSvtAv1EncConfiguration* config) {
 
     return EB_ErrorNone;
 }
+
+EbErrorType svt_av1_set_ar_coeffs(SequenceControlSet* scs_ptr) {
+    const NoiseArgs args          = {.width            = scs_ptr->static_config.source_width,
+                                     .height           = scs_ptr->static_config.source_height,
+                                     .str_luma         = scs_ptr->static_config.noise_strength,
+                                     .str_chroma       = scs_ptr->static_config.noise_strength_chroma,
+                                     .chroma_from_luma = scs_ptr->static_config.noise_chroma_from_luma,
+                                     .grain_size       = scs_ptr->static_config.noise_size,
+                                     .color_range      = find_color_range(&scs_ptr->static_config)};
+    scs_ptr->film_grain_ar_coeffs = coeffs[get_grain_size(&args)];
+
+    return EB_ErrorNone;
+}
